@@ -1,5 +1,21 @@
 *.class
 *.log
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+src/main/generated/**
+**/target/
+
+# IDEs
+.eclipse
+.idea
+.project
+.vscode
+.settings
+
+# Metals + other LSP stuff
+.bloop
+.bsp
+**/.metals
+
+# misc junk
 hs_err_pid*
+*.DS_Store
