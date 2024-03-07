@@ -33,6 +33,9 @@ object EntryPoint extends IOApp {
       .build
   }
 
+  def prepareRouter[F[_]: Async](repo: PixelRepository[F]) =
+    AppRouter[F](analyticsService = Analytics[F](repo), storeService = PixelStore[F](repo))
+
   override def run(args: List[String]): IO[ExitCode] = {
 
     val res = for {
@@ -47,21 +50,10 @@ object EntryPoint extends IOApp {
         engine: CairoEngine
     ): IO[ExitCode] = {
       PixelRepository[IO](engine = engine, semaphore = lock, supervisor = manager).use { repo =>
-        val router = AppRouter[IO](analyticsService = Analytics(repo), storeService = PixelStore[IO](repo))
-        val server = prepareServer[IO](httpConf, logger, router)
-        server.use(_ => IO.never)
+        prepareServer[IO](httpConf, logger, prepareRouter[IO](repo)).useForever
       }
     }
 
-    /*
-     *  This is a kinda incorrect workaround for the fact that EmbeddedDatastore resource
-     *  should be in use over the http4s server.
-     *  This leads to the fact that the whole application isn't cancelable (ie it doesn't
-     *  catches SIGTERM (issued by a Ctrl-C keystroke, for example) and required to be
-     *  suspended to background in shell (via Ctrl-Z) or killed by SIGKILL right away.
-     *  This is an inherently wrong for any production application, but I giving up at this moment
-     *  due to the lack of time, sorry for that fact.
-     * */
     val exitCode = res
       .use { case (logger, httpConf, dbConf, lock, manager) =>
         EmbeddedDatastore[IO, ExitCode](path = dbConf.dataDir)(
