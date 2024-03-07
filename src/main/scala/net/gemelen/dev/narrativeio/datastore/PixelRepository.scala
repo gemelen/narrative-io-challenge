@@ -3,6 +3,8 @@ package net.gemelen.dev.narrativeio.datastore
 import net.gemelen.dev.narrativeio.domain.Input
 import net.gemelen.dev.narrativeio.domain.Pixel
 
+import scala.util.Try
+
 import cats.effect.kernel.Resource
 import cats.effect.kernel.Sync
 import cats.effect.std.Semaphore
@@ -106,7 +108,7 @@ object PixelRepository {
         val sql =
           "DROP TABLE IF EXISTS pixel;"
         supervisor.supervise {
-          semaphore.permit.use[Unit](_ => engine.ddl(sql, sqlContext).pure[F])
+          semaphore.permit.use[Unit](_ => F.*>(Try(engine.ddl(sql, sqlContext)).pure[F])(F.unit))
         }.void
       }
 

@@ -18,6 +18,7 @@ import io.circe.generic.auto.*
 import io.questdb.cairo.CairoEngine
 import org.http4s.*
 import org.http4s.ember.server.EmberServerBuilder
+import org.http4s.server.Server
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
@@ -48,17 +49,19 @@ object EntryPoint extends IOApp {
 
     def effect(logger: SelfAwareStructuredLogger[IO], lock: Semaphore[IO], manager: Supervisor[IO], httpConf: HttpConf)(
         engine: CairoEngine
-    ): IO[ExitCode] = {
-      PixelRepository[IO](engine = engine, semaphore = lock, supervisor = manager).use { repo =>
-        prepareServer[IO](httpConf, logger, prepareRouter[IO](repo)).useForever
+    ): Resource[IO, Server] = {
+      PixelRepository[IO](engine = engine, semaphore = lock, supervisor = manager).flatMap { repo =>
+        prepareServer[IO](httpConf, logger, prepareRouter[IO](repo))
       }
     }
 
     val exitCode = res
       .use { case (logger, httpConf, dbConf, lock, manager) =>
-        EmbeddedDatastore[IO, ExitCode](path = dbConf.dataDir)(
-          effect(logger, lock, manager, httpConf)
-        ).useForever
+        val server: Resource[IO, Server] = EmbeddedDatastore[IO](dbConf.dataDir)
+          .flatMap { engine =>
+            effect(logger, lock, manager, httpConf)(engine)
+          }
+        server.useForever.as(ExitCode.Success)
       }
 
     exitCode
